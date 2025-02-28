@@ -1,0 +1,170 @@
+Histopathologic Cancer Detection Using Deep Learning
+Introduction
+This project aims to develop a deep learning model for histopathologic cancer detection using computer vision. The goal is to build an algorithm that can identify metastatic cancer in histopathologic scans of lymph nodes, automating a time-consuming and complex process for pathologists.
+
+Understanding the Dataset
+The dataset consists of high-resolution histopathology images, with the training set containing 220,025 images and the test set containing 57,468 images. These images originate from the PatchCamelyon (PCam) dataset, which itself is derived from the Camelyon16 Challenge dataset. The dataset is balanced, with a 60:40 distribution of non-cancerous (negative) and cancerous (positive) samples.
+
+Each image is a small patch (96×96 pixels) extracted from larger whole-slide scans. The center 32×32 pixel region determines the label, meaning that only cancerous tissue in the center of the image influences the classification. This ensures that fully convolutional models do not rely on padding effects.
+
+Evaluation Metric: AU-ROC Curve
+The model's performance is measured using the Area Under the Receiver Operating Characteristic (AU-ROC) curve.
+
+The ROC curve plots the True Positive Rate (TPR) vs. False Positive Rate (FPR).
+The AUC score determines how well the model distinguishes between cancerous and non-cancerous samples.
+Higher AUC (~1.0) means better classification performance.
+Exploratory Data Analysis (EDA) & Preprocessing
+We first analyze the dataset by loading the CSV file that contains image IDs and corresponding labels.
+
+Sample Data from train_labels.csv
+ID	Label
+f38a6374c3...	0
+c18f2d887b...	1
+755db6279d...	0
+bc3f0c64fb...	0
+068aba587a...	0
+The distribution of labels is visualized using a pie chart, confirming the 60:40 negative-to-positive class ratio.
+
+Sampling & Data Augmentation
+Since the dataset is large (220,025 images), we sampled 160,000 images (80,000 from each class) to balance the dataset and speed up training.
+
+Data Augmentation Techniques (Applied to Training Data)
+To improve generalization and model robustness, we apply data augmentations such as:
+
+Random Horizontal & Vertical Flips (p=0.4)
+Random Rotations (up to 20°)
+Normalization
+This ensures that the model learns from diverse image variations, reducing overfitting.
+
+Dataset Preparation for PyTorch
+The dataset is converted into a PyTorch-compatible format, where it is split into training and validation sets using a 90:10 ratio. A custom PyTorch Dataset class is created to handle image loading and transformations.
+
+python
+Copy
+Edit
+class CreateDataset(Dataset):
+    def __init__(self, df_data, data_dir='./', transform=None):
+        super().__init__()
+        self.df = df_data.values
+        self.data_dir = data_dir
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.df)
+    
+    def __getitem__(self, index):
+        img_name, label = self.df[index]
+        img_path = os.path.join(self.data_dir, img_name + '.tif')
+        image = cv2.imread(img_path)
+        if self.transform is not None:
+            image = self.transform(image)
+        return image, label
+The training and validation datasets are then loaded using PyTorch DataLoaders, enabling efficient batch processing and shuffling.
+
+Model Architecture: Convolutional Neural Network (CNN)
+A deep CNN model is built using PyTorch to classify images into cancerous (1) and non-cancerous (0). The architecture consists of:
+
+5 Convolutional Layers with Batch Normalization, ReLU Activation, and MaxPooling
+Fully Connected (FC) Layers for classification
+Dropout Layers to prevent overfitting
+Sigmoid Activation for binary classification
+CNN Model Implementation in PyTorch
+python
+Copy
+Edit
+class CNN(nn.Module):
+    def __init__(self):
+        super(CNN, self).__init__()
+        self.conv_layers = nn.Sequential(
+            nn.Conv2d(3, 32, 3, stride=1, padding=0),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2, 2),
+
+            nn.Conv2d(32, 64, 2, stride=1, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2, 2),
+
+            nn.Conv2d(64, 128, 3, stride=1, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2, 2),
+
+            nn.Conv2d(128, 256, 3, stride=1, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2, 2),
+
+            nn.Conv2d(256, 512, 3, stride=1, padding=1),
+            nn.BatchNorm2d(512),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2, 2)
+        )
+        
+        self.fc_layers = nn.Sequential(
+            nn.Linear(512 * 3 * 3, 1024),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.4),
+            nn.Linear(1024, 512),
+            nn.Dropout(0.4),
+            nn.Linear(512, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        x = self.conv_layers(x)
+        x = x.view(x.shape[0], -1)
+        x = self.fc_layers(x)
+        return x
+The model is then transferred to GPU (if available) for faster training.
+
+Training & Validation
+The model is trained using:
+
+Binary Cross-Entropy Loss (BCELoss)
+Adam Optimizer (learning rate = 0.00015)
+20 epochs with early stopping based on validation loss
+python
+Copy
+Edit
+criterion = nn.BCELoss()
+optimizer = optim.Adam(model.parameters(), lr=0.00015)
+n_epochs = 20
+During training, the validation loss continuously decreases, showing the model is learning well.
+
+Predictions on Test Set
+Once trained, the best model is saved and loaded for inference. The test set predictions are generated using:
+
+python
+Copy
+Edit
+model.eval()
+preds = []
+for data, _ in test_loader:
+    data = data.cuda()
+    output = model(data)
+    preds.extend(output.cpu().detach().numpy())
+The predictions are then stored in a submission CSV file for Kaggle evaluation.
+
+Results & Performance
+The trained model achieves an AUC score of ~0.95, indicating high accuracy in distinguishing between cancerous and non-cancerous samples.
+
+Visualization of Predictions
+A set of random test images is displayed along with their predicted labels:
+
+python
+Copy
+Edit
+fig = plt.figure(figsize=(25, 4))
+for idx in range(20):
+    ax = fig.add_subplot(2, 10, idx + 1, xticks=[], yticks=[])
+    imshow(images[idx])
+    prob = "Cancer" if sample_sub.label[idx] >= 0.5 else "Normal" 
+    ax.set_title('{}'.format(prob))
+Conclusion
+This deep learning-based solution successfully automates cancer detection in histopathology images, significantly improving the efficiency of diagnosis. The model can be further refined by:
+
+Using more advanced architectures like ResNet or EfficientNet
+Fine-tuning hyperparameters
+Integrating attention mechanisms for improved feature extraction
