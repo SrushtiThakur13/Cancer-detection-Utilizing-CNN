@@ -57,35 +57,6 @@ This project implements a deep learning model to automate the detection of metas
 
 ---
 
-## 🚀 How to Run the Project
-
-1. Clone the repository:
-
-```bash
-git clone https://github.com/srushtithakur13/Histopathologic-Cancer-Detection.git
-cd Histopathologic-Cancer-Detection
-```
-
-2. Install required libraries:
-
-```bash
-pip install -r requirements.txt
-```
-
-3. Train the model:
-
-```bash
-python Code/train.py
-```
-
-4. Make predictions:
-
-```bash
-python Code/inference.py
-```
-
----
-
 ## 📌 Key Insights
 
 - CNNs can effectively detect cancerous patterns in small histopathology image patches.
@@ -95,10 +66,4 @@ python Code/inference.py
 ---
 
 ## 📜 Notes
-
-- This project is for educational purposes and experimental research in healthcare AI.
 - Data is sourced from public datasets [Kaggle - Histopathologic Cancer Detection].
-
----
-
-✨ Feel free to fork, explore, and contribute to the project!
